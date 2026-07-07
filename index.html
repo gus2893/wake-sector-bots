@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wake Sector - Bot Learning</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>WAKE SECTOR / bot learning</h1>
+  <nav>
+    <a href="index.html" class="on">Dashboard</a>
+    <a href="replay.html">Replays</a>
+    <a href="gym.html">Web Gym</a>
+    <a href="train.html">Train</a>
+    <a href="play/index.html">Play</a>
+  </nav>
+</header>
+<main>
+  <div class="grid cols3" id="statCards">
+    <div class="card"><h2>Lineage</h2><div class="big" id="stLineage">-</div><div class="dim" id="stGenerated"></div></div>
+    <div class="card"><h2>Rounds fought (last session)</h2><div class="big" id="stRounds">-</div><div class="dim" id="stHeals"></div></div>
+    <div class="card"><h2>Containment</h2><div class="big" id="stContain">-</div><div class="dim">rescues / recalls</div></div>
+  </div>
+
+  <div class="grid cols2" style="margin-top:14px">
+    <div class="card">
+      <h2>PPO - Avg Return per gather</h2>
+      <canvas id="chReturn" class="chart"></canvas>
+    </div>
+    <div class="card">
+      <h2>PPO - Avg Episode Length (steps)</h2>
+      <canvas id="chEp" class="chart"></canvas>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h2>Match records</h2>
+    <table id="tblMatches">
+      <thead><tr><th>Match</th><th>Map</th><th>Agents</th><th>Rounds</th><th>Kills</th><th>Size</th><th>Written</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="dim" style="margin-top:8px">Records sync from the UE box via <span class="mono">Tools/BRWeb/sync.ps1</span>.</p>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h2>A/B series (policy vs scripted, pooled deaths)</h2>
+    <table>
+      <thead><tr><th>#</th><th>Environment</th><th>Policy</th><th>Script</th><th>Verdict</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>pit (6-act)</td><td>4</td><td>3</td><td>parity</td></tr>
+        <tr><td>2</td><td>pit (6-act)</td><td>8</td><td>8</td><td>parity</td></tr>
+        <tr><td>3</td><td>wide gym (6-act)</td><td>4</td><td>7</td><td class="mono" style="color:var(--good)">policy win</td></tr>
+        <tr><td>4</td><td>wide gym (6-act)</td><td>14</td><td>13</td><td>parity</td></tr>
+        <tr><td>5</td><td>walled gym (6-act)</td><td>16</td><td>15</td><td>parity</td></tr>
+        <tr><td colspan="2"><b>Pooled (6-action lineage)</b></td><td><b>46</b></td><td><b>46</b></td><td><b>exact parity - lineage closed</b></td></tr>
+        <tr><td>-</td><td>13-action lineage</td><td colspan="3" class="dim">banking hours; first A/B pending</td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+<script src="js/data.js"></script>
+<script>
+(async () => {
+  try {
+    const m = await BRData.json('data/metrics.json');
+    document.getElementById('stLineage').textContent = m.lineage || '-';
+    document.getElementById('stGenerated').textContent = 'synced ' + (m.generated || '');
+    document.getElementById('stRounds').textContent = m.counts ? m.counts.rounds : '-';
+    document.getElementById('stHeals').textContent = m.counts ? (m.counts.heals + ' heal doses landed') : '';
+    document.getElementById('stContain').textContent = m.counts ? (m.counts.rescues + ' / ' + m.counts.recalls) : '-';
+    if (m.ppo && m.ppo.length) {
+      const idx = m.ppo.map((p, i) => ({ x: i, ret: p.ret, ep: p.epLen }));
+      BRData.chart(document.getElementById('chReturn'), [{ pts: idx.map(p => ({ x: p.x, y: p.ret })), color: '#4da3ff', label: 'Avg Return' }]);
+      BRData.chart(document.getElementById('chEp'), [{ pts: idx.map(p => ({ x: p.x, y: p.ep })), color: '#46d18c', label: 'Episode Len' }]);
+    }
+  } catch (e) { document.getElementById('stLineage').textContent = 'run sync.ps1'; }
+  try {
+    const list = await BRData.json('data/manifest.json');
+    const tb = document.querySelector('#tblMatches tbody');
+    for (const r of (Array.isArray(list) ? list : [list])) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td class="mono">${r.id}</td><td>${r.map}</td><td>${r.agents}</td><td>${r.rounds}</td>
+        <td>${r.kills}</td><td>${r.sizeMB} MB</td><td class="dim">${r.written}</td>
+        <td><a href="replay.html?m=${encodeURIComponent(r.file)}">watch</a></td>`;
+      tb.appendChild(tr);
+    }
+  } catch (e) { /* no manifest yet */ }
+})();
+</script>
+</body>
+</html>

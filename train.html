@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Train - Wake Sector Bot Learning</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>WAKE SECTOR / bot learning</h1>
+  <nav>
+    <a href="index.html">Dashboard</a>
+    <a href="replay.html">Replays</a>
+    <a href="gym.html">Web Gym</a>
+    <a href="train.html" class="on">Train</a>
+    <a href="play/index.html">Play</a>
+  </nav>
+</header>
+<main>
+  <div class="grid cols2">
+    <div class="card">
+      <h2>In-browser training (evolution strategy)</h2>
+      <p class="dim">A population of 19&rarr;64&rarr;64&rarr;13 policies plays the web gym as the odd
+      cohort vs the scripted brain (the same A/B protocol as the UE gym). Fitness = round wins +
+      damage shaping. Runs headless in a worker-less loop; keep the tab open.</p>
+      <div class="toolbar" style="margin-top:10px">
+        <button id="btnStart" class="primary">Start training</button>
+        <button id="btnStop">Stop</button>
+        <label>pop <select id="selPop"><option>12</option><option selected>16</option><option>24</option></select></label>
+        <label>rounds/genome <select id="selRounds"><option>2</option><option selected>3</option><option>5</option></select></label>
+      </div>
+      <div class="kv"><span>Generation</span><span id="stGen">0</span></div>
+      <div class="kv"><span>Best fitness</span><span id="stFit">-</span></div>
+      <div class="kv"><span>Best vs-script win share</span><span id="stWin">-</span></div>
+      <div class="kv"><span>Status</span><span id="stMsg">idle</span></div>
+      <div class="toolbar" style="margin-top:10px">
+        <button id="btnExport">Export best (.json)</button>
+        <input type="file" id="fileImport" accept=".json" title="import a genome">
+        <a href="gym.html" class="pill">watch best in the gym &rarr;</a>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Fitness over generations</h2>
+      <canvas id="chFit" class="chart"></canvas>
+      <h2 style="margin-top:14px">Run history (this browser)</h2>
+      <div class="feed mono" id="runLog"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h2>Results store</h2>
+    <p class="dim">Results persist to this browser (localStorage) and can be exported. To push every
+    generation to a remote DB (e.g. a Supabase table with columns <span class="mono">run_id, gen, fitness,
+    win_share, genome</span>), set an endpoint - rows POST as JSON with the key in the
+    <span class="mono">apikey</span> + <span class="mono">Authorization</span> headers.</p>
+    <div class="toolbar">
+      <input type="text" id="dbUrl" placeholder="https://xxxx.supabase.co/rest/v1/br_results" size="46" style="background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 10px">
+      <input type="password" id="dbKey" placeholder="anon key" size="24" style="background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 10px">
+      <button id="btnDbSave">Save</button>
+      <span class="dim" id="dbMsg"></span>
+    </div>
+  </div>
+</main>
+<script src="js/data.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/net.js"></script>
+<script src="js/train.js"></script>
+</body>
+</html>

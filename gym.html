@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Web Gym - Wake Sector Bot Learning</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>WAKE SECTOR / bot learning</h1>
+  <nav>
+    <a href="index.html">Dashboard</a>
+    <a href="replay.html">Replays</a>
+    <a href="gym.html" class="on">Web Gym</a>
+    <a href="train.html">Train</a>
+    <a href="play/index.html">Play</a>
+  </nav>
+</header>
+<main>
+  <div class="toolbar">
+    <button id="btnPause" class="primary">Pause</button>
+    <label>speed <select id="selSpeed">
+      <option value="1">1x</option><option value="4" selected>4x</option><option value="16">16x</option>
+    </select></label>
+    <label>odd cohort <select id="selPolicy">
+      <option value="scripted">scripted (mirror match)</option>
+      <option value="bc">UE brain.json (behavior clone)</option>
+      <option value="evolved">best evolved (from Train page)</option>
+      <option value="random">random actions</option>
+    </select></label>
+    <button id="btnReset">Reset round</button>
+    <span class="dim" id="msg"></span>
+  </div>
+  <div class="grid" style="grid-template-columns: 1fr 300px">
+    <canvas id="world" class="world" width="880" height="880"></canvas>
+    <div>
+      <div class="card"><h2>Scoreboard (wins / deaths)</h2><div id="score"></div></div>
+      <div class="card" style="margin-top:12px"><h2>Cohort tally</h2><div id="cohort" class="mono"></div>
+        <p class="dim" style="margin-top:6px">Odd bots (B2/4/6/8) run the selected policy; even bots stay scripted - the same A/B protocol as the UE gym.</p>
+      </div>
+      <div class="card" style="margin-top:12px"><h2>Events</h2><div class="feed" id="feed"></div></div>
+    </div>
+  </div>
+  <p class="dim" style="margin-top:10px">This is the web port of the UE combat gym (environment contract v1): disc r=50m,
+  shrinking lethal ring, cover bands at r=14/26/34m, four loot clusters, centre exos, 13-action scripted arbiter,
+  19-feature observations - see <span class="mono">Tools/BRWeb/CONTRACT.md</span>.</p>
+</main>
+<script src="js/data.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/net.js"></script>
+<script>
+(() => {
+  const cv = document.getElementById('world');
+  const feed = document.getElementById('feed');
+  let paused = false, speed = 4;
+  const sim = BRSim.create({
+    seed: Date.now() & 0xffff,
+    onEvent: e => {
+      if (e.k === 'snap' || e.k === 'hit') return;
+      const div = document.createElement('div');
+      if (e.k === 'death') { div.className = 'kill'; div.textContent = `r${sim.round} B${e.a + 1} died${e.by >= 0 ? ' to B' + (e.by + 1) : ' (ring)'}`; }
+      else if (e.k === 'win') { div.className = 'loot'; div.textContent = `r${sim.round} B${e.a + 1} WINS the round`; }
+      else if (e.k === 'round') div.textContent = `-- round ${e.n} --`;
+      else if (e.k === 'heal') { div.className = 'loot'; div.textContent = `B${e.a + 1} used ${e.item}`; }
+      else return;
+      feed.appendChild(div); feed.scrollTop = feed.scrollHeight;
+    },
+  });
+
+  async function setPolicy(kind) {
+    const msg = document.getElementById('msg');
+    let fn = null;
+    if (kind === 'bc') {
+      try {
+        const brain = await BRData.json('data/brain.json');
+        const net = BRNet.fromBrainJson(brain);
+        fn = obs => BRSim.BC_MAP[brain.actions[BRNet.argmax(net.forward(obs))]] ?? -1;
+        msg.textContent = 'UE behavior-clone brain loaded (' + brain.actions.length + ' actions)';
+      } catch (e) { msg.textContent = 'no data/brain.json - run sync.ps1'; }
+    } else if (kind === 'evolved') {
+      const saved = localStorage.getItem('brweb_best_genome');
+      if (saved) {
+        const net = BRNet.fromFlat(JSON.parse(saved));
+        fn = obs => BRNet.argmax(net.forward(obs));
+        msg.textContent = 'evolved policy loaded from Train page';
+      } else msg.textContent = 'no evolved policy yet - run the Train page first';
+    } else if (kind === 'random') {
+      fn = () => Math.floor(Math.random() * 13);
+      msg.textContent = 'odd cohort takes random actions';
+    } else msg.textContent = '';
+    for (let i = 1; i < 8; i += 2) sim.policies[i] = fn;
+  }
+
+  function updatePanels() {
+    document.getElementById('score').innerHTML = sim.agents.map((a, i) =>
+      `<div class="kv"><span style="color:${BRData.agentColor(i)}">${a.name}${i % 2 ? ' [policy]' : ''}</span>
+       <span>${sim.wins[i]} / ${sim.deaths[i]}</span></div>`).join('');
+    let pw = 0, sw = 0, pd = 0, sd = 0;
+    for (let i = 0; i < 8; i++) {
+      if (i % 2) { pw += sim.wins[i]; pd += sim.deaths[i]; } else { sw += sim.wins[i]; sd += sim.deaths[i]; }
+    }
+    document.getElementById('cohort').textContent =
+      `POLICY  wins ${pw}  deaths ${pd}\nSCRIPT  wins ${sw}  deaths ${sd}`;
+  }
+
+  let last = 0;
+  function frame(ts) {
+    if (!paused) {
+      const dt = Math.min(0.1, (ts - last) / 1000 || 0.016);
+      for (let k = 0; k < speed; k++) BRSim.step(sim, dt);
+      BRSim.draw(sim, cv);
+      updatePanels();
+    }
+    last = ts;
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  document.getElementById('btnPause').onclick = e => { paused = !paused; e.target.textContent = paused ? 'Resume' : 'Pause'; };
+  document.getElementById('selSpeed').onchange = e => speed = +e.target.value;
+  document.getElementById('selPolicy').onchange = e => setPolicy(e.target.value);
+  document.getElementById('btnReset').onclick = () => BRSim.reset(sim);
+})();
+</script>
+</body>
+</html>
